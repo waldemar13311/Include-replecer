@@ -1,31 +1,47 @@
 import glob
 
-file_name = 'nginx.conf'
-new_file_text = ""
+def replace_include_in_file(file_name, offset=0):
+    new_file_text = ""
 
-# Читаем основной файл
-with open(file_name) as file:
-    # Построчно
-    for line in file:
-        # Если строка содержит include и не комментарий
-        if line.__contains__("include") and (not line.strip().startswith('#')):
-            # получаем маску файла справа от слова include
-            included_mask_name = line.split()[1].replace(";", "")
-            # в цикле проходимся по всем файлам,
-            # которые соответствуют маске
-            for included_file_name in glob.glob(included_mask_name):
+    try:
+        with open(file_name) as file:
+            for line in file:
                 start_spaces_in_line = len(line) - len(line.lstrip())
-                new_file_text += "\n"
-                # добавляем в качестве комментария
-                # имя файла над которым работали
-                new_file_text += " " * start_spaces_in_line + "#include " + included_file_name + ";\n"
-                with open(included_file_name) as included_file:
-                    for line_in_included_file in included_file:
-                        new_file_text += " " * start_spaces_in_line + line_in_included_file
-                # после каждого прочитанного файла
-                # добавляем новую строку
-                new_file_text += "\n"
-        else:
-           new_file_text += line
 
-print(new_file_text)
+                # Если строка содержит include и не комментарий
+                if "include" in line and not line.strip().startswith('#'):
+
+                    # Получаем маску файла справа от слова include
+                    included_mask_name = line.split()[1].replace(";", "")
+                    included_files = glob.glob(included_mask_name)
+
+                    if not included_files:
+                        # Если файлы по маске не найдены, добавляем сообщение
+                        new_file_text += " " * (offset + start_spaces_in_line) + f"#include {included_mask_name} - file not found\n"
+                    else:
+                        # В цикле проходимся по всем файлам, которые соответствуют маске
+                        for included_file_name in included_files:
+                            # Добавляем в качестве комментария имя файла, которое подставили вместо include
+                            new_file_text += "\n"
+                            new_file_text += " " * (offset + start_spaces_in_line) + f"#include {included_file_name};\n"
+
+                            # Рекурсивно обрабатываем включенный файл
+                            new_file_text += replace_include_in_file(included_file_name, offset + start_spaces_in_line)
+                else:
+                    # Если строка не содержит include, просто добавляем её
+                    new_file_text += " " * offset + line
+
+    except FileNotFoundError:
+        # Если текущий файл не найден, добавляем сообщение
+        new_file_text += " " * offset + f"#include {file_name} - file not found\n"
+
+    # После каждого прочитанного файла добавляем новую строку
+    return new_file_text + "\n"
+
+
+# Основной файл для обработки
+nginx_main_file = 'nginx.conf'
+
+# Обрабатываем файл и выводим результат
+final_text = replace_include_in_file(nginx_main_file)
+print(final_text)
